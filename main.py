@@ -17,6 +17,7 @@ import os
 import requests
 import atc
 import argparse
+from tqdm import tqdm
 
 # for demo only, please replace with your own API key
 Turing_API_key = "64c88489ad7f432591d702ec1334dedc" 
@@ -39,8 +40,8 @@ class TextToSpeech:
             temp = []
             for syllable in syllables:
                 for p in TextToSpeech.punctuation:
-                    syllable = syllable.replace(p, "")
-                if syllable.isdigit():
+                    syllable = syllable.replace(p, "")  #replace punctuation with empty
+                if syllable.isdigit(): #convert digit to chinese
                     syllable = atc.num2chinese(syllable)
                     new_sounds = lazy_pinyin(syllable, style=pypinyin.TONE3)
                     for e in new_sounds:
@@ -52,10 +53,24 @@ class TextToSpeech:
         syllables = preprocess(syllables)
         for syllable in syllables:
             path = "syllables/"+syllable+".wav"
+
             _thread.start_new_thread(TextToSpeech._play_audio, (path, delay))
             delay += 0.355
 
-    def synthesize(self, text, src, dst):
+    def synthesize(self, textfile, src, dst):
+        def load_from_disk(textfile):
+            texts = []
+            with open(textfile,'r',encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line == "":
+                        continue
+                    #print(line)
+                    #print(line.split(' ')[0])
+                    texts.extend(line.split(' '))
+            return texts
+        text = load_from_disk(textfile)
+
         """
         Synthesize .wav from text
         src is the folder that contains all syllables .wav files
@@ -68,9 +83,13 @@ class TextToSpeech:
         syllables = lazy_pinyin(text, style=pypinyin.TONE3)
 
         # initialize to be complete silence, each character takes up ~500ms
-        result = AudioSegment.silent(duration=500*len(text))
-        for syllable in syllables:
+        result = AudioSegment.silent(duration=500*len(syllables))
+        for syllable in tqdm(syllables):
+            #print(syllable)
             path = src+syllable+".wav"
+            if not os.path.exists(path):
+                #print("miss ",path)
+                continue
             sound_file = Path(path)
             # insert 500 ms silence for punctuation marks
             if syllable in TextToSpeech.punctuation:
